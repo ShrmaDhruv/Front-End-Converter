@@ -103,18 +103,70 @@ export class UserCardComponent implements OnInit {
 """
 
 HTML_SAMPLE = """
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link href="./style.css" type="text/css" rel="stylesheet" />
-  </head>
-  <body>
-    <h1 class="text-3xl font-bold underline">
-      Hello world!
-    </h1>
-  </body>
+<head>
+<title>Form Validation + Backend</title>
+</head>
+<body>
+
+<h2>Register</h2>
+
+<form id="form">
+<input type="text" id="name" placeholder="Name"><br><br>
+<input type="email" id="email" placeholder="Email"><br><br>
+<input type="password" id="password" placeholder="Password"><br><br>
+
+<button type="submit">Submit</button>
+</form>
+
+<p id="msg"></p>
+
+<script>
+
+const form = document.getElementById("form");
+
+form.addEventListener("submit", async function(e){
+
+    e.preventDefault();
+
+    const name = document.getElementById("name").value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    // basic validation
+    if(name === "" || email === "" || password === ""){
+        document.getElementById("msg").innerText = "All fields required";
+        return;
+    }
+
+    try{
+
+        const res = await fetch("http://localhost:3000/register", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                name,
+                email,
+                password
+            })
+        });
+
+        const data = await res.json();
+
+        document.getElementById("msg").innerText = data.message;
+
+    }catch(err){
+        console.log(err);
+    }
+
+});
+
+</script>
+
+</body>
 </html>
 """
 

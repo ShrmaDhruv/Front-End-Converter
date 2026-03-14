@@ -52,7 +52,6 @@ def parse_response(raw: str) -> ParsedResponse:
 
     # ── Method 1: Clean JSON parse ───────────────────────────────────────
     # Since we use Ollama's "format": "json", this should succeed 95%+ of the time
-
     try:
         cleaned = _clean_json_string(raw)
         data    = json.loads(cleaned)

@@ -1,7 +1,7 @@
 """
 hf_client.py
 
-Qwen2.5-Coder-1.5B-Instruct client using HuggingFace pipeline API.
+Qwen2.5-Coder-3B-Instruct client using HuggingFace pipeline API.
 Used by Layer 3 detection and AST extraction.
 
 pipeline() replaces the manual tokenizer + model.generate() + batch_decode()
@@ -26,11 +26,8 @@ Usage:
     response = client.chat(messages, max_new_tokens=150)
 """
 
-from transformers import logging
-
-logging.set_verbosity_error()
-
 MODEL_NAME = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+
 
 class HFClient:
 
@@ -43,23 +40,29 @@ class HFClient:
         return cls._instance
 
     def _load(self):
-        if self._loaded:
+        if self._loaded and hasattr(self, "pipe"):
             return
 
-        from transformers import pipeline
+        import torch
+        from transformers import pipeline, logging
+        logging.set_verbosity_error()
 
-        print("  [HFClient] Loading Qwen2.5-Coder-1.5B-Instruct via pipeline...")
-        print("  [HFClient] First load takes 20-40 seconds. Subsequent calls are instant.")
+        self._loaded = False
 
-        self.pipe = pipeline(
-            "text-generation",
-            model      = MODEL_NAME,
-            torch_dtype = "auto",
-            device_map  = "auto",
-        )
+        print("Loading Qwen2.5-Coder-1.5B-Instruct via pipeline...")
 
-        self._loaded = True
-        print(f"  [HFClient] Pipeline ready on {self.pipe.device}")
+        try:
+            self.pipe = pipeline(
+                "text-generation",
+                model      = MODEL_NAME,
+                dtype      = torch.float16,
+                device_map = "auto",
+            )
+            self._loaded = True
+            print(f"Pipeline ready on {self.pipe.device}")
+
+        except Exception as e:
+            raise RuntimeError(f"[HFClient] Failed to load model: {e}")
 
     def chat(
         self,
@@ -67,38 +70,25 @@ class HFClient:
         max_new_tokens: int   = 512,
         temperature:    float = 0.1,
     ) -> str:
-        """
-        Send a messages list and return the model's response string.
+        from transformers import GenerationConfig
 
-        pipeline() handles chat template application, tokenization,
-        generation, and decoding internally.
-
-        The output is a list of dicts. The last dict in generated_text
-        is always the assistant's reply — that is the one we extract.
-
-        Args:
-            messages       : List of role/content dicts
-            max_new_tokens : Max tokens to generate
-            temperature    : Low = deterministic, high = creative
-
-        Returns:
-            Response string from the model.
-        """
         self._load()
 
-        output = self.pipe(
-            messages,
+        generation_config = GenerationConfig(
             max_new_tokens = max_new_tokens,
             temperature    = temperature,
             do_sample      = temperature > 0,
+        )
+
+        output = self.pipe(
+            messages,
+            generation_config = generation_config,
         )
 
         return output[0]["generated_text"][-1]["content"].strip()
 
     def is_available(self) -> bool:
         try:
-            import transformers
-            import torch
             return True
         except ImportError:
             return False
