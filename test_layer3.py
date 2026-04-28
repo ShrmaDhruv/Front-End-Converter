@@ -8,14 +8,12 @@ Run with model: python test_layer3.py --live
 """
 
 import sys
+import warnings
+warnings.filterwarnings('ignore')
+
 from layer3.response_parser import parse_response, ParsedResponse
 from layer3.score_merger    import merge_results
 from layer3.cache           import DetectionCache
-import warnings
-warnings.filterwarnings('ignore')
-from transformers import logging
-
-logging.set_verbosity_error()
 
 NIGHTMARE_VUE_WITH_DOM = """
 export default {
@@ -218,12 +216,12 @@ def test_cache():
 
 
 def test_live():
-    from hf_client import HFClient
-    from layer3    import detect_with_llm
+    from ollama_client import OLClient
+    from layer3       import detect_with_llm
     import time
 
-    if not HFClient().is_available():
-        print("\n  Skipped - run: pip install transformers torch accelerate")
+    if not OLClient().is_available():
+        print("\n  Skipped - Ollama unreachable. Run: ollama serve")
         return
 
     cases = [
@@ -258,8 +256,8 @@ def test_live():
     passed = 0
     for label, code, l1_scores, expected in cases:
         try:
-            result  = detect_with_llm(code, l1_scores)
-            ok      = result.detected == expected
+            result = detect_with_llm(code, l1_scores)
+            ok     = result.detected == expected
             if ok:
                 passed += 1
             print(f"  {'PASS' if ok else 'FAIL'} - {label}")
