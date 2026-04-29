@@ -1,10 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import LivePreviewIDE from "./src/LivePreviewIDE";
 
-function App() {
-  return <LivePreviewIDE />;
-}
+import TranslatorApp from "./src/App";
+import "./src/styles.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
+root.render(
+  <React.StrictMode>
+    <TranslatorApp />
+  </React.StrictMode>
+);

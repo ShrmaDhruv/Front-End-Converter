@@ -59,6 +59,9 @@ Rules that always apply:
   - Preserve method body logic as closely as possible
   - Do not add features not present in the IR
   - Do not remove features that are present in the IR
+  - Do not include comments of any kind in the translated code
+  - Do not include line comments, block comments, JSX comments, HTML comments,
+    template comments, docstrings, or explanatory annotations
   - Return ONLY the translated code — no explanation, no markdown fences,
     no preamble, no comments about what you changed"""
 
@@ -83,7 +86,7 @@ Computed:
 Lifecycle:
   - onMount        → useEffect(() => { body }, [])
   - onDestroy      → useEffect(() => { return () => { body } }, [])
-  - onUpdate       → useEffect(() => { body })           // no deps array
+  - onUpdate       → useEffect(() => { body })
   - onEveryRender  → useEffect(() => { body })
   - onChanges      → useEffect(() => { body }, [relevant deps])
   - Import useEffect from 'react'
@@ -243,13 +246,13 @@ Structure:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ComponentName</title>
     <style>
-      /* styles here */
+      styles here
     </style>
   </head>
   <body>
-    <!-- markup here -->
+    markup here
     <script>
-      // logic here
+      logic here
     </script>
   </body>
   </html>
