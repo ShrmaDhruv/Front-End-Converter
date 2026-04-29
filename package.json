@@ -5,8 +5,8 @@
   
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "parcel index.html",
-    "build":"parcel build index.html"
+    "dev": "node scripts/parcel-runner.mjs dev",
+    "build": "node scripts/parcel-runner.mjs build"
   },
   "repository": {
     "type": "git",

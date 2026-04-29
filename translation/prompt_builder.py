@@ -32,8 +32,16 @@ from ast_layer.ir_schema import IR
 SUPPORTED_TARGETS = {"React", "Vue", "Angular", "HTML"}
 
 _BASE_SYSTEM = """You are an expert frontend code translator.
-You receive a component described in a framework-agnostic IR (Intermediate
+You receive original source code plus a framework-agnostic IR (Intermediate
 Representation) as JSON and translate it into the requested target framework.
+
+Priority:
+  - Treat the ORIGINAL SOURCE CODE as canonical and highest priority
+  - Use the IR as a supporting checklist, not as the only source of truth
+  - If the source code and IR conflict, follow the source code
+  - Preserve rendered structure, event behavior, state updates, imports,
+    props, methods, lifecycle behavior, text content, classes, and styles
+  - Ignore any IR entry that is not supported by the original source code
 
 IR field meanings:
   props      — inputs the component receives from its parent
@@ -57,11 +65,18 @@ Lifecycle hook mapping:
 Rules that always apply:
   - Preserve all state names, method names, and prop names exactly
   - Preserve method body logic as closely as possible
-  - Do not add features not present in the IR
-  - Do not remove features that are present in the IR
+  - Do not add features not present in the source code
+  - Do not remove features that are present in the source code
+  - Use the IR to recover structure only when the source code is ambiguous
+  - Never add empty placeholder lifecycle hooks, empty placeholder methods, or
+    placeholder imports
+  - When translating React useState setters, convert setName(...) calls into
+    the target framework's state update syntax; never copy React setter calls
+    into Vue, Angular, or HTML output
   - Do not include comments of any kind in the translated code
   - Do not include line comments, block comments, JSX comments, HTML comments,
     template comments, docstrings, or explanatory annotations
+  - Do not output //, /* */, {/* */}, <!-- -->, or any other comment syntax
   - Return ONLY the translated code — no explanation, no markdown fences,
     no preamble, no comments about what you changed"""
 
@@ -104,7 +119,6 @@ Events (in JSX):
   - events.change  → onChange={handler}
   - events.input   → onInput={handler}
   - events.submit  → onSubmit={handler}
-
 Template:
   - Return JSX from the component function
   - Use className instead of class
@@ -162,6 +176,15 @@ Events (in template):
   - events.change → @change="handler"
   - events.input  → @input="handler"
   - events.submit → @submit.prevent="handler"
+
+  - Do not import click, input, change, submit, onClick, onInput, onChange,
+    or any event name from 'vue'
+  - Event handlers are regular local functions referenced by template directives
+  - Never output React setter calls such as setCount(...) in Vue code; update
+    count.value in script or count directly in the template expression
+  - Do not use watchEffect to simulate click/change/input/submit handlers
+  - Every template event directive must either contain a valid inline expression
+    or reference a handler function that is defined in <script setup>
 
 Template:
   - Use v-if="condition" for conditionals
@@ -257,6 +280,23 @@ Structure:
   </body>
   </html>
 
+Safety and initialization:
+  - Every id or class referenced by JavaScript must exist in the HTML markup
+    before it is queried
+  - If the script queries DOM elements or attaches listeners, put that setup
+    inside document.addEventListener('DOMContentLoaded', () => { ... }) unless
+    the script is placed after every referenced element
+  - DOMContentLoaded callbacks must contain real setup or an initial render call
+  - Do not leave empty containers without rendering their expected content
+  - Use exactly this viewport shape: content="width=device-width, initial-scale=1.0"
+  - Store queried elements in constants and check them before using them:
+    const button = document.getElementById('button-id')
+    if (button) { button.addEventListener('click', handler) }
+  - Never call addEventListener, set textContent, set innerHTML, or access value
+    on a possibly null DOM element
+  - Keep selectors, markup ids/classes, and JavaScript references synchronized
+  - Place listener attachment in one initialization flow, not scattered at top level
+
 State:
   - Each IRState entry → let name = init  (at top of script block)
   - Use let for mutable state, const for constants
@@ -280,13 +320,24 @@ Methods:
 
 Events:
   - Prefer addEventListener over inline attributes
+  - Do not use inline event attributes such as onclick, onchange, oninput, or onsubmit
+  - Do not assign event handler properties such as element.onclick = handler
   - events.click  → element.addEventListener('click', handler)
   - events.change → element.addEventListener('change', handler)
   - events.submit → form.addEventListener('submit', (e) => { e.preventDefault(); handler() })
 
+  - Attach event listeners only after DOMContentLoaded or after the element markup
+  - Guard each listener target with an if (element) check
+
 DOM updates:
   - Update DOM manually after state changes using getElementById or querySelector
   - Set element.textContent for text, element.innerHTML sparingly
+  - Create initial HTML markup or call render() during DOMContentLoaded so the UI
+    is visible immediately
+  - Every method that changes state must update the visible DOM directly or call
+    a render/update function afterward
+  - If the source uses React setters such as setCount, do not create setCount in
+    HTML; instead update the mutable variable and then update the DOM element
 
 Template:
   - Use standard HTML elements
@@ -302,13 +353,19 @@ _TARGET_INSTRUCTIONS = {
 }
 
 
-def build_messages(ir: IR, target_framework: str) -> list[dict]:
+def build_messages(
+    ir: IR,
+    target_framework: str,
+    source_code: str | None = None,
+) -> list[dict]:
     """
     Build Ollama messages list for translation.
 
     Args:
         ir               : Validated IR instance from ir_builder
         target_framework : One of React | Vue | Angular | HTML
+        source_code      : Original source code. When provided, this is
+                           the highest-priority translation input.
 
     Returns:
         messages list for Phi3Client.chat()
@@ -324,11 +381,23 @@ def build_messages(ir: IR, target_framework: str) -> list[dict]:
 
     system  = _BASE_SYSTEM + "\n" + _TARGET_INSTRUCTIONS[target_framework]
     ir_json = ir.to_json()
+    source_section = ""
+    if source_code and source_code.strip():
+        source_section = (
+            "Original source code - highest priority:\n"
+            "```\n"
+            f"{source_code.strip()}\n"
+            "```\n\n"
+        )
 
     user = (
         f"Translate this component from {ir.framework} to {target_framework}.\n\n"
-        f"Component IR:\n{ir_json}\n\n"
-        f"Return only the {target_framework} code."
+        "Use the original source code as the source of truth. "
+        "Use the IR only as a supporting extraction checklist. "
+        "If they disagree, the original source code wins.\n\n"
+        f"{source_section}"
+        f"Component IR - supporting checklist:\n{ir_json}\n\n"
+        f"Return only the {target_framework} code with zero comments."
     )
 
     return [

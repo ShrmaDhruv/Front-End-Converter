@@ -379,9 +379,13 @@ def build_ir(summary: dict) -> IR:
     client = _get_client()
 
     if not client.is_available():
-        raise RuntimeError(
-            "Ollama is not reachable at localhost:11434.\n"
-            "Run: ollama serve"
+        ir = _fallback_ir_from_summary(summary)
+        result = validate(ir)
+        if result.is_valid:
+            return ir
+        raise ValueError(
+            "Ollama is not reachable and fallback IR was invalid.\n"
+            f"Errors: {result.errors}"
         )
 
     messages  = _build_prompt(summary)

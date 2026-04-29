@@ -134,16 +134,30 @@ def detect_source(
     if layer1.is_ambiguous and use_llm_detection:
         from layer3 import detect_with_llm
 
-        layer3 = detect_with_llm(code, layer1.scores)
-        return PipelineDetection(
-            framework=layer3.detected,
-            confidence=layer3.confidence,
-            source=layer3.source,
-            ask_user=layer3.ask_user,
-            confidence_scores=layer1.confidence,
-            raw_scores=layer1.scores,
-            reasoning=layer3.reasoning,
-        )
+        try:
+            layer3 = detect_with_llm(code, layer1.scores)
+            return PipelineDetection(
+                framework=layer3.detected,
+                confidence=layer3.confidence,
+                source=layer3.source,
+                ask_user=layer3.ask_user,
+                confidence_scores=layer1.confidence,
+                raw_scores=layer1.scores,
+                reasoning=layer3.reasoning,
+            )
+        except RuntimeError as exc:
+            return PipelineDetection(
+                framework=layer1.detected,
+                confidence=confidence_label(winner_confidence),
+                source="layer1",
+                ask_user=True,
+                confidence_scores=layer1.confidence,
+                raw_scores=layer1.scores,
+                reasoning=(
+                    "Rule-based detector was ambiguous and LLM detection was unavailable: "
+                    f"{exc}"
+                ),
+            )
 
     return PipelineDetection(
         framework=layer1.detected,
@@ -229,7 +243,7 @@ def run_pipeline(
             warnings=["source and target are the same framework - code returned unchanged"],
         )
 
-    translated: TranslationResult = translate_ir(ir, target)
+    translated: TranslationResult = translate_ir(ir, target, source_code=code)
 
     return PipelineResult(
         ok=translated.ok,

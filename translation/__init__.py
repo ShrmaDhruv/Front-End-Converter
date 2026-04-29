@@ -38,6 +38,7 @@ from translation.translation_validator import validate_translation
 
 MAX_NEW_TOKENS = 2048
 TEMPERATURE    = 0.1
+MAX_TRANSLATION_ATTEMPTS = 3
 
 SUPPORTED = {"React", "Vue", "Angular", "HTML"}
 
@@ -58,15 +59,26 @@ def _get_client():
     return Phi3Client()
 
 
-def _run_translation(ir: IR, target: str, client) -> str:
-    messages = build_messages(ir, target)
+def _run_translation(
+    ir: IR,
+    target: str,
+    client,
+    source_code: str | None = None,
+) -> str:
+    messages = build_messages(ir, target, source_code=source_code)
     raw      = client.chat(messages, max_new_tokens=MAX_NEW_TOKENS, temperature=TEMPERATURE)
     return clean(raw, target)
 
 
-def _retry_prompt(ir: IR, target: str, errors: list[str], client) -> str:
+def _retry_prompt(
+    ir: IR,
+    target: str,
+    errors: list[str],
+    client,
+    source_code: str | None = None,
+) -> str:
     from translation.prompt_builder import build_messages as bm
-    messages = bm(ir, target)
+    messages = bm(ir, target, source_code=source_code)
     error_str = "\n".join(f"  - {e}" for e in errors)
     messages.append({
         "role": "assistant",
@@ -76,14 +88,19 @@ def _retry_prompt(ir: IR, target: str, errors: list[str], client) -> str:
         "role": "user",
         "content": (
             f"Your previous translation had these problems:\n{error_str}\n\n"
-            f"Please fix them and return only the corrected {target} code."
+            "Use the original source code as the source of truth and the IR only as a checklist. "
+            f"Please fix them and return only the corrected {target} code with zero comments."
         ),
     })
     raw = client.chat(messages, max_new_tokens=MAX_NEW_TOKENS, temperature=TEMPERATURE)
     return clean(raw, target)
 
 
-def translate_ir(ir: IR, target: str) -> TranslationResult:
+def translate_ir(
+    ir: IR,
+    target: str,
+    source_code: str | None = None,
+) -> TranslationResult:
     """
     Translate an already-built IR into the target framework using Phi3.
 
@@ -113,12 +130,14 @@ def translate_ir(ir: IR, target: str) -> TranslationResult:
             "Run: ollama serve"
         )
 
-    translated = _run_translation(ir, target, client)
+    translated = _run_translation(ir, target, client, source_code=source_code)
     validation = validate_translation(translated, ir, target)
+    attempts = 1
 
-    if not validation.is_valid:
-        translated = _retry_prompt(ir, target, validation.errors, client)
+    while not validation.is_valid and attempts < MAX_TRANSLATION_ATTEMPTS:
+        translated = _retry_prompt(ir, target, validation.errors, client, source_code=source_code)
         validation = validate_translation(translated, ir, target)
+        attempts += 1
 
     return TranslationResult(
         ok       = validation.is_valid,
@@ -168,7 +187,7 @@ def translate(
         )
 
     ir = extract_ir(code, source)
-    return translate_ir(ir, target)
+    return translate_ir(ir, target, source_code=code)
 
 
 __all__ = [

@@ -80,6 +80,68 @@ def _strip_fallback(raw: str) -> str:
     return "\n".join(cleaned).strip()
 
 
+def _remove_comments(code: str) -> str:
+    code = re.sub(r'<!--[\s\S]*?-->', '', code)
+    code = re.sub(r'/\*[\s\S]*?\*/', '', code)
+    code = re.sub(
+        r'(?m)(^|[;{}\s])//[^\n\r]*',
+        lambda match: match.group(1).rstrip(),
+        code,
+    )
+    return code
+
+
+def _remove_empty_placeholders(code: str) -> str:
+    code = re.sub(
+        r'\n?\s*on(?:Mounted|Unmounted|Updated|BeforeMount|BeforeUnmount)\s*'
+        r'\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)\s*;?',
+        '',
+        code,
+    )
+    code = re.sub(
+        r'\n?\s*watch(?:Effect)?\s*\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)\s*;?',
+        '',
+        code,
+    )
+    code = re.sub(
+        r'\n?\s*useEffect\s*\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*'
+        r'(?:,\s*\[[^\]]*\])?\s*\)\s*;?',
+        '',
+        code,
+    )
+    return code
+
+
+def _prune_unused_vue_imports(code: str) -> str:
+    def replace_import(match: re.Match) -> str:
+        specifiers = [item.strip() for item in match.group(1).split(",") if item.strip()]
+        rest = code[:match.start()] + code[match.end():]
+        kept = []
+
+        for specifier in specifiers:
+            local_name = specifier.split(" as ", 1)[-1].strip()
+            if re.search(rf'\b{re.escape(local_name)}\b', rest):
+                kept.append(specifier)
+
+        if not kept:
+            return ""
+        return f"import {{ {', '.join(kept)} }} from 'vue'"
+
+    return re.sub(
+        r'import\s*\{([^}]+)\}\s*from\s*["\']vue["\']',
+        replace_import,
+        code,
+    )
+
+
+def _sanitize_output(code: str, target_framework: str) -> str:
+    code = _remove_comments(code)
+    code = _remove_empty_placeholders(code)
+    if target_framework == "Vue":
+        code = _prune_unused_vue_imports(code)
+    return code.strip()
+
+
 def clean(raw: str, target_framework: str) -> str:
     """
     Extract clean translated code from a raw Ollama response.
@@ -102,10 +164,10 @@ def clean(raw: str, target_framework: str) -> str:
 
     fenced = _extract_fenced_block(text)
     if fenced:
-        return fenced
+        return _sanitize_output(fenced, target_framework)
 
     by_marker = _extract_by_marker(text, target_framework)
     if by_marker:
-        return by_marker
+        return _sanitize_output(by_marker, target_framework)
 
-    return _strip_fallback(text)
+    return _sanitize_output(_strip_fallback(text), target_framework)

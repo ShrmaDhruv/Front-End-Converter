@@ -64,6 +64,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:59211"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -78,7 +79,20 @@ def load_ollama_models_on_startup() -> None:
     global OLLAMA_WARMUP_STATUS
 
     print(f"Loading required Ollama models: {', '.join(REQUIRED_MODELS)}")
-    results = warm_required_models()
+    try:
+        results = warm_required_models()
+    except RuntimeError as exc:
+        OLLAMA_WARMUP_STATUS = [
+            {
+                "model": model,
+                "ok": False,
+                "message": f"warm-up skipped/failed: {exc}",
+            }
+            for model in REQUIRED_MODELS
+        ]
+        print(f"Ollama warm-up failed; API will start and report runtime errors as needed. {exc}")
+        return
+
     OLLAMA_WARMUP_STATUS = [
         {"model": result.model, "ok": result.ok, "message": result.message}
         for result in results

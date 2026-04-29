@@ -17,6 +17,15 @@ Run live tests:    python test_translation.py --live
 
 import sys
 import warnings
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 warnings.filterwarnings("ignore")
 
 from translation.response_cleaner       import clean
@@ -379,10 +388,52 @@ def test_validator():
         ),
         (
             "Valid HTML output passes",
-            "<!DOCTYPE html>\n<html>\n<body>\n<script>\nlet count = 0\n</script>\n</body>\n</html>",
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body>\n<p id=\"count\">0</p>\n<script>\nlet count = 0\n</script>\n</body>\n</html>",
             make_ir("HTML", states=["count"]),
             "HTML",
             True,
+        ),
+        (
+            "HTML missing referenced DOM id fails",
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body>\n<script>\ndocument.getElementById('missing').addEventListener('click', submit)\n</script>\n</body>\n</html>",
+            make_ir("HTML"),
+            "HTML",
+            False,
+        ),
+        (
+            "HTML unsafe unguarded listener target fails",
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body>\n<button id=\"submit\">Go</button>\n<script>\nconst submitButton = document.getElementById('submit')\nsubmitButton.addEventListener('click', submit)\n</script>\n</body>\n</html>",
+            make_ir("HTML"),
+            "HTML",
+            False,
+        ),
+        (
+            "HTML invalid viewport fails",
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"initial-scale=3.0\">\n</head>\n<body>\n<p>Hi</p>\n<script>\nlet count = 0\n</script>\n</body>\n</html>",
+            make_ir("HTML"),
+            "HTML",
+            False,
+        ),
+        (
+            "HTML inline event handler fails",
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body>\n<button onclick=\"increment()\">Add</button>\n<script>\nfunction increment() {}\n</script>\n</body>\n</html>",
+            make_ir("HTML"),
+            "HTML",
+            False,
+        ),
+        (
+            "HTML state mutation without DOM render fails",
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body>\n<p id=\"count\">0</p>\n<script>\nlet count = 0\nfunction increment() { count += 1 }\n</script>\n</body>\n</html>",
+            make_ir("HTML", states=["count"]),
+            "HTML",
+            False,
+        ),
+        (
+            "HTML event property assignment fails",
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body>\n<button id=\"add\">Add</button>\n<script>\nconst add = document.getElementById('add')\nif (add) { add.onclick = increment }\nfunction increment() {}\n</script>\n</body>\n</html>",
+            make_ir("HTML"),
+            "HTML",
+            False,
         ),
     ]
 
