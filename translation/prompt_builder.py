@@ -77,6 +77,8 @@ Rules that always apply:
   - Do not include line comments, block comments, JSX comments, HTML comments,
     template comments, docstrings, or explanatory annotations
   - Do not output //, /* */, {/* */}, <!-- -->, or any other comment syntax
+  - Do not emit random strings, hex fragments, debug artifacts, or any text
+    that did not come from the original component
   - Return ONLY the translated code — no explanation, no markdown fences,
     no preamble, no comments about what you changed"""
 
@@ -202,48 +204,67 @@ _ANGULAR_INSTRUCTIONS = """
 Target: Angular TypeScript class component
 
 Structure:
-  import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core'
+  import { Component } from '@angular/core'
+  - Add Input, Output, EventEmitter, and lifecycle interfaces to the
+    @angular/core import only when they are actually used
 
   @Component({
     selector: 'app-component-name',
     template: `...`
   })
-  export class ComponentNameComponent implements OnInit, OnDestroy {
+  export class ComponentNameComponent {
     ...
   }
 
 State:
   - Each IRState entry → public name: type = init  (class field)
+  - Preserve every initial state value exactly
+  - State from React useState is local component state, not @Input()
   - Use appropriate TypeScript types: string, number, boolean, any, T[]
 
 Computed:
   - Each IRComputed entry → get name(): type { return expression }
   - Getter syntax, no decorator needed
+  - Do not add getters or setters unless the source has a real derived value
+  - Remove unused or redundant getters/setters
 
 Lifecycle:
   - onMount   → ngOnInit(): void { body }    implement OnInit
   - onDestroy → ngOnDestroy(): void { body } implement OnDestroy
   - onUpdate  → ngDoCheck(): void { body }   implement DoCheck
   - onChanges → ngOnChanges(changes): void   implement OnChanges
+  - Add lifecycle hooks only when the original source has equivalent side
+    effects; never add ngOnInit, ngDoCheck, or other hooks for placeholder
+    initialization or empty bodies
 
 Props:
   - Each IRProp → @Input() propName: type
   - Required props have no default, optional use = defaultValue
   - Import Input from '@angular/core'
+  - Never mutate an @Input() property directly
+  - If a received input needs local edits, copy it into local state and update
+    that local state
+  - If a state change must notify the parent, use @Output() with EventEmitter
 
 Outputs:
   - EventEmitter fields → @Output() eventName = new EventEmitter<type>()
   - Import Output, EventEmitter from '@angular/core'
+  - Add an @Output() EventEmitter when the source behavior calls a parent
+    callback or when changed input-like data needs to propagate upward
 
 Methods:
   - Each IRMethod → methodName(params: types): returnType { body }
   - Async methods → async methodName(...): Promise<type> { body }
+  - Avoid dead code and redundant wrapper methods
 
 Events (in template):
   - events.click  → (click)="handler()"
   - events.change → (change)="handler($event)"
   - events.input  → (input)="handler($event)"
   - events.submit → (ngSubmit)="handler()"
+  - React onClick must become Angular (click) with the same handler logic
+  - Inline React state updates must become equivalent Angular expressions,
+    for example onClick={() => setSaved(!saved)} → (click)="saved = !saved"
 
 Template:
   - Use *ngIf="condition" for conditionals
@@ -251,11 +272,20 @@ Template:
   - Use [propName]="value" for property bindings
   - Use [(ngModel)]="stateName" for two-way binding
   - Use class instead of className
+  - Preserve ternary order exactly: condition ? A : B must stay condition ? A : B
+  - Use Angular interpolation exactly: {{ condition ? 'A' : 'B' }}
+  - Do not flip conditional rendering logic or swap ternary branches
+  - Do not add [class], [ngClass], or extra class bindings unless the React
+    source had equivalent dynamic class behavior
+  - Do not include hex fragments, random strings, markdown artifacts, or any
+    unexpected text inside the template
 
 Implements clause:
   - Add OnInit if onMount lifecycle present
   - Add OnDestroy if onDestroy lifecycle present
-  - Import all implemented interfaces from '@angular/core'"""
+  - Import all implemented interfaces from '@angular/core'
+  - Keep the component clean and minimal; no unused imports, empty hooks,
+    dead methods, extra bindings, or boilerplate"""
 
 
 _HTML_INSTRUCTIONS = """

@@ -109,7 +109,25 @@ def _remove_empty_placeholders(code: str) -> str:
         '',
         code,
     )
+    code = re.sub(
+        r'\n?\s*ng(?:OnInit|OnDestroy|DoCheck|OnChanges)\s*'
+        r'\([^)]*\)\s*(?::\s*\w+)?\s*\{\s*\}',
+        '',
+        code,
+    )
     return code
+
+
+def _remove_artifact_lines(code: str) -> str:
+    cleaned = []
+    for line in code.splitlines():
+        stripped = line.strip()
+        if re.fullmatch(r'(?:0x)?[0-9a-fA-F]{8,}', stripped):
+            continue
+        if re.fullmatch(r'[A-Za-z0-9+/=]{24,}', stripped):
+            continue
+        cleaned.append(line)
+    return "\n".join(cleaned)
 
 
 def _prune_unused_vue_imports(code: str) -> str:
@@ -134,11 +152,36 @@ def _prune_unused_vue_imports(code: str) -> str:
     )
 
 
+def _prune_unused_angular_imports(code: str) -> str:
+    def replace_import(match: re.Match) -> str:
+        specifiers = [item.strip() for item in match.group(1).split(",") if item.strip()]
+        rest = code[:match.start()] + code[match.end():]
+        kept = []
+
+        for specifier in specifiers:
+            local_name = specifier.split(" as ", 1)[-1].strip()
+            if re.search(rf'\b{re.escape(local_name)}\b', rest):
+                kept.append(specifier)
+
+        if not kept:
+            return ""
+        return f"import {{ {', '.join(kept)} }} from '@angular/core'"
+
+    return re.sub(
+        r'import\s*\{([^}]+)\}\s*from\s*["\']@angular/core["\']',
+        replace_import,
+        code,
+    )
+
+
 def _sanitize_output(code: str, target_framework: str) -> str:
     code = _remove_comments(code)
     code = _remove_empty_placeholders(code)
+    code = _remove_artifact_lines(code)
     if target_framework == "Vue":
         code = _prune_unused_vue_imports(code)
+    if target_framework == "Angular":
+        code = _prune_unused_angular_imports(code)
     return code.strip()
 
 

@@ -43,7 +43,6 @@ _FRAMEWORK_MARKERS = {
     ],
     "Angular": [
         r'@Component',
-        r'ngOnInit',
         r'export\s+class',
         r'@angular/core',
     ],
@@ -86,6 +85,10 @@ _EMPTY_PLACEHOLDER_PATTERNS = [
     (
         "empty React effect",
         r'\buseEffect\s*\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*(?:,\s*\[[^\]]*\])?\s*\)',
+    ),
+    (
+        "empty Angular lifecycle hook",
+        r'\bng(?:OnInit|OnDestroy|DoCheck|OnChanges)\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{\s*\}',
     ),
 ]
 
@@ -142,6 +145,124 @@ def _validate_vue_event_handlers(code: str, errors: list[str]) -> None:
                     errors.append(
                         f"Vue template event references undefined handler '{name}'"
                     )
+
+
+def _angular_template(code: str) -> str:
+    match = re.search(r'template\s*:\s*`([\s\S]*?)`', code)
+    if match:
+        return match.group(1)
+
+    match = re.search(r'template\s*:\s*["\']([^"\']*)["\']', code)
+    if match:
+        return match.group(1)
+
+    return ""
+
+
+def _angular_input_names(code: str, ir: IR) -> set[str]:
+    names = {prop.name for prop in ir.props if prop.name}
+    names.update(
+        re.findall(
+            r'@Input\s*\(\s*\)\s+'
+            r'(?:(?:public|private|protected|readonly)\s+)?'
+            r'([A-Za-z_]\w*)',
+            code,
+        )
+    )
+    return names
+
+
+def _validate_angular_template(code: str, errors: list[str]) -> None:
+    template = _angular_template(code)
+    if not template:
+        return
+
+    if re.search(r'\bon[A-Z]\w*\s*=', template):
+        errors.append("Angular template contains React-style event binding")
+
+    if "className=" in template:
+        errors.append("Angular template uses className instead of class")
+
+    if re.search(r'(?<!\{)\{[^{}\n]*\?[^{}\n]*:[^{}\n]*\}(?!\})', template):
+        errors.append("Angular template contains JSX-style ternary interpolation")
+
+    for line in template.splitlines():
+        stripped = line.strip()
+        if re.fullmatch(r'(?:0x)?[0-9a-fA-F]{8,}', stripped):
+            errors.append("Angular template contains a standalone hex artifact")
+            return
+        if re.fullmatch(r'[A-Za-z0-9+/=]{24,}', stripped):
+            errors.append("Angular template contains a standalone random artifact")
+            return
+
+
+def _validate_angular_input_mutation(code: str, ir: IR, errors: list[str]) -> None:
+    input_names = _angular_input_names(code, ir)
+    if not input_names:
+        return
+
+    template = _angular_template(code)
+    class_code = re.sub(r'template\s*:\s*`[\s\S]*?`', '', code)
+    class_code = re.sub(r'template\s*:\s*["\'][^"\']*["\']', '', class_code)
+
+    for name in sorted(input_names):
+        escaped = re.escape(name)
+        if re.search(rf'\bthis\.{escaped}\s*(?:\+\+|--|[+\-*/]?=)', class_code):
+            errors.append(
+                f"Angular output mutates @Input() '{name}' directly; use local state or @Output()"
+            )
+
+        if re.search(
+            rf'\([^)]+\)\s*=\s*["\'][^"\']*\b{escaped}\s*(?:\+\+|--|[+\-*/]?=)',
+            template,
+        ):
+            errors.append(
+                f"Angular template mutates @Input() '{name}' directly; use local state or @Output()"
+            )
+
+
+_ANGULAR_LIFECYCLE_TO_IR = {
+    "ngOnInit": "onMount",
+    "ngOnDestroy": "onDestroy",
+    "ngDoCheck": "onUpdate",
+    "ngOnChanges": "onChanges",
+}
+
+
+def _validate_angular_lifecycle(code: str, ir: IR, errors: list[str]) -> None:
+    allowed_hooks = {item.hook for item in ir.lifecycle if item.hook}
+    for hook, ir_hook in _ANGULAR_LIFECYCLE_TO_IR.items():
+        if re.search(rf'\b{hook}\s*\(', code) and ir_hook not in allowed_hooks:
+            errors.append(
+                f"Angular output adds {hook} without matching source lifecycle behavior"
+            )
+
+
+def _validate_angular_imports(code: str, errors: list[str]) -> None:
+    for match in re.finditer(r'import\s*\{([^}]+)\}\s*from\s*["\']@angular/core["\']', code):
+        raw_specifiers = match.group(1).split(",")
+        specifiers = [
+            item.strip().split(" as ", 1)[-1].strip()
+            for item in raw_specifiers
+            if item.strip()
+        ]
+        rest = code[:match.start()] + code[match.end():]
+        unused = [
+            item for item in specifiers
+            if not re.search(rf'\b{re.escape(item)}\b', rest)
+        ]
+        if unused:
+            errors.append(
+                "Angular output imports unused core symbol(s): "
+                f"{', '.join(unused)}"
+            )
+
+
+def _validate_angular_output(code: str, ir: IR, errors: list[str]) -> None:
+    _validate_angular_template(code, errors)
+    _validate_angular_input_mutation(code, ir, errors)
+    _validate_angular_lifecycle(code, ir, errors)
+    _validate_angular_imports(code, errors)
 
 
 def _html_markup(code: str) -> str:
@@ -452,6 +573,9 @@ def validate_translation(
     if target_framework == "Vue":
         _validate_vue_imports(code, errors)
         _validate_vue_event_handlers(code, errors)
+
+    if target_framework == "Angular":
+        _validate_angular_output(code, ir, errors)
 
     if target_framework == "HTML":
         _validate_html_output(code, ir, errors)

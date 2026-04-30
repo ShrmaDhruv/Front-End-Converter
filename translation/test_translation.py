@@ -381,10 +381,31 @@ def test_validator():
         ),
         (
             "Valid Angular output passes",
-            "import { Component, OnInit } from '@angular/core'\n@Component({ selector: 'app-test' })\nexport class TestCompComponent implements OnInit {\n  ngOnInit() {}\n}",
+            "import { Component } from '@angular/core'\n@Component({ selector: 'app-test', template: `<button (click)=\"saved = !saved\">{{ saved ? 'Saved' : 'Save item' }}</button>` })\nexport class TestCompComponent {\n  saved: boolean = false\n}",
             make_ir("Angular"),
             "Angular",
             True,
+        ),
+        (
+            "Angular mutating @Input fails",
+            "import { Component, Input } from '@angular/core'\n@Component({ selector: 'app-test', template: `<button (click)=\"count = count + 1\">Add</button>` })\nexport class TestCompComponent {\n  @Input() count: number = 0\n}",
+            make_ir("Angular", props=["count"]),
+            "Angular",
+            False,
+        ),
+        (
+            "Angular unnecessary lifecycle fails",
+            "import { Component, OnInit } from '@angular/core'\n@Component({ selector: 'app-test', template: `<p>Hi</p>` })\nexport class TestCompComponent implements OnInit {\n  ngOnInit(): void { this.ready = true }\n  ready: boolean = false\n}",
+            make_ir("Angular", states=["ready"]),
+            "Angular",
+            False,
+        ),
+        (
+            "Angular template artifact fails",
+            "import { Component } from '@angular/core'\n@Component({ selector: 'app-test', template: `<p>Hi</p>\n9f8a7b6c5d4e3f2a` })\nexport class TestCompComponent {}",
+            make_ir("Angular"),
+            "Angular",
+            False,
         ),
         (
             "Valid HTML output passes",
