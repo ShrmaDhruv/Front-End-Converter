@@ -124,6 +124,7 @@ export default function TranslatorApp() {
         outputLines={editorStats.outputLines}
         copyLabel={copyLabel}
         onInputChange={setInputCode}
+        onOutputChange={setOutputCode}
         onCopyOutput={copyOutput}
       />
 

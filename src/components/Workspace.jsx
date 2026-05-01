@@ -11,6 +11,7 @@ export function Workspace({
   outputLines,
   copyLabel,
   onInputChange,
+  onOutputChange,
   onCopyOutput,
 }) {
   return (
@@ -30,7 +31,7 @@ export function Workspace({
         subtitle={`${targetFramework} result`}
         color={targetAccent}
         value={outputCode}
-        readOnly
+        onChange={onOutputChange}
         placeholder="Translated code will appear here after the pipeline finishes..."
         lines={outputLines}
         action={

@@ -1,26 +1,25 @@
 """
 phi3_client.py
 
-Phi-3 3.8B client using Ollama's local REST API.
+DeepSeek Coder 6.7B client using Ollama's local REST API.
 Used by the translation pipeline to generate target framework code.
 
-Phi-3 is a completion-style model well suited for code generation tasks.
-It receives a structured prompt containing the IR and target framework
-instructions and returns the translated code.
+DeepSeek Coder is used for code translation tasks.
+It receives source-code translation prompts and returns translated code.
 
 Singleton pattern ensures one HTTP session is reused across calls.
 Lazy import means the requests package is only required at runtime,
 so unit tests work without it installed.
 
 Prereqs:
-    ollama pull phi3:3.8b
+    ollama pull deepseek-coder:6.7b
     ollama serve          # runs on localhost:11434 by default
 
 Install:
     pip install requests
 """
 
-MODEL_NAME   = "phi3:3.8b"
+MODEL_NAME   = "deepseek-coder:6.7b"
 OLLAMA_URL   = "http://localhost:11434/api/chat"
 TIMEOUT_SECS = 180
 
@@ -51,7 +50,7 @@ class Phi3Client:
             probe.raise_for_status()
             self._session = session
             self._loaded  = True
-            print("Phi3 connection ready.")
+            print("DeepSeek Coder connection ready.")
 
         except Exception as e:
             raise RuntimeError(f"[Phi3Client] Ollama unreachable: {e}")
@@ -83,7 +82,7 @@ class Phi3Client:
             response.raise_for_status()
 
         except Exception as e:
-            raise RuntimeError(f"[Phi3Client] Ollama request failed: {e}")
+            raise RuntimeError(f"[DeepseekClient] Ollama request failed: {e}")
 
         return response.json()["message"]["content"].strip()
 
