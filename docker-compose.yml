@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  ollama-service:
+    image: ollama/ollama
+    container_name: ollama-dhruv
+    ports:
+      - "11434:11434"
+    volumes:
+      - /Volumes/SSD/rohan/models/ollama/models:/root/.ollama
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: [gpu]
+    restart: unless-stopped
