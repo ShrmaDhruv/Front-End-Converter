@@ -25,12 +25,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MODEL_NAME   = os.getenv("MODEL_NAME", "deepseek-coder:6.7b")
-OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "localhost")
-OLLAMA_PORT  = os.getenv("OLLAMA_PORT", "11434")
+OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 TIMEOUT_SECS = int(os.getenv("TIMEOUT_SECS", "180"))
 
-OLLAMA_BASE = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
-OLLAMA_URL  = f"{OLLAMA_BASE}/api/chat"
+OLLAMA_URL = f"{OLLAMA_BASE}/api/chat"
 
 
 class Phi3Client:

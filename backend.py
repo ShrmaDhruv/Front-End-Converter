@@ -30,18 +30,8 @@ from pipeline import AUTO_DETECT, SUPPORTED_FRAMEWORKS, detect_source, run_pipel
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# Config from environment
-# ---------------------------------------------------------------------------
 
-OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "localhost")
-OLLAMA_PORT  = os.getenv("OLLAMA_PORT", "11434")
-OLLAMA_BASE  = f"{OLLAMA_HOST}:{OLLAMA_PORT}"
-
-_raw_origins = os.getenv("CORS_ORIGINS", "")
-CORS_ORIGINS: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()]
-
-# ---------------------------------------------------------------------------
+OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 Framework = Literal["Auto Detect", "React", "Vue", "Angular", "HTML"]
 ConcreteFramework = Literal["React", "Vue", "Angular", "HTML"]
@@ -73,7 +63,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

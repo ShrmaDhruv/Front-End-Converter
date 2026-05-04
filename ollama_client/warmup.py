@@ -10,8 +10,8 @@ from phi_client.phi3_client import MODEL_NAME as PHI3_MODEL
 
 load_dotenv()
 
-OLLAMA_CHAT_URL     = os.getenv("OLLAMA_CHAT_URL", "")
-OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "")
+OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_CHAT_URL     = f"{OLLAMA_BASE_URL}/api/chat"
 OLLAMA_KEEP_ALIVE   = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
 WARMUP_TIMEOUT_SECS = int(os.getenv("OLLAMA_WARMUP_TIMEOUT_SECS", "240"))
 
@@ -26,9 +26,9 @@ class WarmupResult:
 
 
 def warm_required_models() -> list[WarmupResult]:
-    if not OLLAMA_BASE_URL or not OLLAMA_CHAT_URL:
+    if not OLLAMA_BASE_URL:
         raise RuntimeError(
-            "[warmup] OLLAMA_BASE_URL and OLLAMA_CHAT_URL must be set in .env"
+            "[warmup] OLLAMA_BASE_URL must be set in .env"
         )
 
     import requests

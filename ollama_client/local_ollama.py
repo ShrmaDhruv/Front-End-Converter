@@ -29,12 +29,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MODEL_NAME   = os.getenv("HF_MODEL_NAME", "qwen2.5-coder:3b")
-OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "localhost")
-OLLAMA_PORT  = os.getenv("OLLAMA_PORT", "11434")
+OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 TIMEOUT_SECS = int(os.getenv("HF_TIMEOUT_SECS", "120"))
 
-OLLAMA_BASE = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
-OLLAMA_URL  = f"{OLLAMA_BASE}/api/chat"
+OLLAMA_URL = f"{OLLAMA_BASE}/api/chat"
 
 
 class OLClient:
