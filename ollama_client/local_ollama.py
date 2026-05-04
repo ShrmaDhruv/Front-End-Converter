@@ -20,12 +20,21 @@ Prereqs:
     ollama serve          # runs on localhost:11434 by default
 
 Install:
-    pip install requests
+    pip install requests python-dotenv
 """
 
-MODEL_NAME   = "qwen2.5-coder:3b"
-OLLAMA_URL   = "http://localhost:11434/api/chat"
-TIMEOUT_SECS = 120
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MODEL_NAME   = os.getenv("HF_MODEL_NAME", "qwen2.5-coder:3b")
+OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "localhost")
+OLLAMA_PORT  = os.getenv("OLLAMA_PORT", "11434")
+TIMEOUT_SECS = int(os.getenv("HF_TIMEOUT_SECS", "120"))
+
+OLLAMA_BASE = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
+OLLAMA_URL  = f"{OLLAMA_BASE}/api/chat"
 
 
 class OLClient:
@@ -46,18 +55,18 @@ class OLClient:
 
         self._loaded = False
 
-        print(f"Connecting to Ollama ({MODEL_NAME})...")
+        print(f"Connecting to Ollama ({MODEL_NAME}) at {OLLAMA_BASE}...")
 
         try:
             session = requests.Session()
-            probe   = session.get("http://localhost:11434", timeout=5)
+            probe   = session.get(OLLAMA_BASE, timeout=5)
             probe.raise_for_status()
             self._session = session
             self._loaded  = True
             print("Ollama connection ready.")
 
         except Exception as e:
-            raise RuntimeError(f"[HFClient] Ollama unreachable: {e}")
+            raise RuntimeError(f"[HFClient] Ollama unreachable at {OLLAMA_BASE}: {e}")
 
     def chat(
         self,
@@ -68,7 +77,7 @@ class OLClient:
         self._load()
 
         payload = {
-            "model":   MODEL_NAME,
+            "model":    MODEL_NAME,
             "messages": messages,
             "stream":   False,
             "options": {
@@ -93,7 +102,7 @@ class OLClient:
     def is_available(self) -> bool:
         try:
             import requests
-            requests.get("http://localhost:11434", timeout=3).raise_for_status()
+            requests.get(OLLAMA_BASE, timeout=3).raise_for_status()
             return True
         except Exception:
             return False

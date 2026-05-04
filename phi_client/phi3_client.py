@@ -16,12 +16,21 @@ Prereqs:
     ollama serve          # runs on localhost:11434 by default
 
 Install:
-    pip install requests
+    pip install requests python-dotenv
 """
 
-MODEL_NAME   = "deepseek-coder:6.7b"
-OLLAMA_URL   = "http://localhost:11434/api/chat"
-TIMEOUT_SECS = 180
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MODEL_NAME   = os.getenv("MODEL_NAME", "deepseek-coder:6.7b")
+OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "localhost")
+OLLAMA_PORT  = os.getenv("OLLAMA_PORT", "11434")
+TIMEOUT_SECS = int(os.getenv("TIMEOUT_SECS", "180"))
+
+OLLAMA_BASE = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
+OLLAMA_URL  = f"{OLLAMA_BASE}/api/chat"
 
 
 class Phi3Client:
@@ -42,18 +51,18 @@ class Phi3Client:
 
         self._loaded = False
 
-        print(f"Connecting to Ollama ({MODEL_NAME})...")
+        print(f"Connecting to Ollama ({MODEL_NAME}) at {OLLAMA_BASE}...")
 
         try:
             session = requests.Session()
-            probe   = session.get("http://localhost:11434", timeout=5)
+            probe   = session.get(OLLAMA_BASE, timeout=5)
             probe.raise_for_status()
             self._session = session
             self._loaded  = True
             print("DeepSeek Coder connection ready.")
 
         except Exception as e:
-            raise RuntimeError(f"[Phi3Client] Ollama unreachable: {e}")
+            raise RuntimeError(f"[Phi3Client] Ollama unreachable at {OLLAMA_BASE}: {e}")
 
     def chat(
         self,
@@ -89,7 +98,7 @@ class Phi3Client:
     def is_available(self) -> bool:
         try:
             import requests
-            requests.get("http://localhost:11434", timeout=3).raise_for_status()
+            requests.get(OLLAMA_BASE, timeout=3).raise_for_status()
             return True
         except Exception:
             return False

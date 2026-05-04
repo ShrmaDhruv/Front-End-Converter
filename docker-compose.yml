@@ -7,10 +7,10 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - /Volumes/SSD/rohan/models/ollama/models:/root/.ollama
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - capabilities: [gpu]
+      - C:\Users\DHRUV\.ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
     restart: unless-stopped

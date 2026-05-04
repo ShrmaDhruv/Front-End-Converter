@@ -15,8 +15,10 @@ Pipeline:
 
 from __future__ import annotations
 
+import os
 from typing import Literal
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +28,20 @@ from pydantic import BaseModel, Field
 from ollama_client.warmup import REQUIRED_MODELS, warm_required_models
 from pipeline import AUTO_DETECT, SUPPORTED_FRAMEWORKS, detect_source, run_pipeline
 
+load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Config from environment
+# ---------------------------------------------------------------------------
+
+OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "localhost")
+OLLAMA_PORT  = os.getenv("OLLAMA_PORT", "11434")
+OLLAMA_BASE  = f"{OLLAMA_HOST}:{OLLAMA_PORT}"
+
+_raw_origins = os.getenv("CORS_ORIGINS", "")
+CORS_ORIGINS: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+# ---------------------------------------------------------------------------
 
 Framework = Literal["Auto Detect", "React", "Vue", "Angular", "HTML"]
 ConcreteFramework = Literal["React", "Vue", "Angular", "HTML"]
@@ -57,17 +73,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:1234",
-        "http://127.0.0.1:1234",
-        "http://localhost:1235",
-        "http://127.0.0.1:1235",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:59211"
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -173,7 +179,7 @@ async def _run_pipeline_endpoint(payload: PipelineRequest, stop_after: StopAfter
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         message = str(exc)
-        status_code = 503 if "Ollama" in message or "localhost:11434" in message else 500
+        status_code = 503 if "Ollama" in message or OLLAMA_BASE in message else 500
         raise HTTPException(status_code=status_code, detail=message) from exc
 
 
